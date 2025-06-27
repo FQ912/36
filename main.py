@@ -70,10 +70,8 @@ class ImageProcessorApp(QMainWindow):
             "Синий канал", 
             "Негатив", 
             "Размытие по Гауссу", 
-            "Нарисовать круг",
-            "Оттенки серого (PyTorch)"
+            "Нарисовать круг"
         ])
-        self.channel_combo.currentIndexChanged.connect(self.process_image)
         layout.addWidget(self.channel_combo)
         
         # Параметры для размытия
@@ -82,7 +80,6 @@ class ImageProcessorApp(QMainWindow):
         self.blur_label = QLabel("Размер ядра (нечетное число):")
         self.blur_input = QLineEdit()
         self.blur_input.setPlaceholderText("например, 5")
-        self.blur_input.textChanged.connect(self.process_image)
         self.blur_layout.addWidget(self.blur_label)
         self.blur_layout.addWidget(self.blur_input)
         self.blur_widget.setVisible(False)
@@ -112,6 +109,11 @@ class ImageProcessorApp(QMainWindow):
         self.circle_widget.setVisible(False)
         layout.addWidget(self.circle_widget)
         
+        # Кнопка применения изменений
+        self.apply_button = QPushButton("Применить изменения")
+        self.apply_button.clicked.connect(self.process_image)
+        layout.addWidget(self.apply_button)
+        
         # Обработчик изменения выбора в комбобоксе
         self.channel_combo.currentTextChanged.connect(self.update_ui)
         
@@ -125,17 +127,16 @@ class ImageProcessorApp(QMainWindow):
                                                 "Изображения (*.png *.jpg *.jpeg)", options=options)
         if file_name:
             try:
-                # Загрузка изображения с помощью OpenCV
+                # Загрузка изображения с помощью OpenCV (в BGR формате)
                 self.image = cv2.imread(file_name)
                 if self.image is None:
                     raise ValueError("Не удалось прочитать файл изображения.")
                 
-                # Конвертация в PyTorch tensor
-                pil_image = Image.open(file_name).convert('RGB')
+                # Конвертация в PyTorch tensor (преобразуем BGR в RGB)
+                pil_image = Image.fromarray(cv2.cvtColor(self.image, cv2.COLOR_BGR2RGB))
                 self.tensor_image = self.transform(pil_image).unsqueeze(0)
                 
                 self.display_image(self.image, self.original_label)
-                self.process_image()
                 self.show_message("Успех", "Изображение успешно загружено!")
             except Exception as e:
                 self.show_message("Ошибка", f"Ошибка загрузки изображения: {str(e)}")
@@ -156,12 +157,11 @@ class ImageProcessorApp(QMainWindow):
             
             if ret:
                 self.image = frame
-                # Конвертация в PyTorch tensor
+                # Конвертация в PyTorch tensor (преобразуем BGR в RGB)
                 pil_image = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
                 self.tensor_image = self.transform(pil_image).unsqueeze(0)
                 
                 self.display_image(self.image, self.original_label)
-                self.process_image()
                 self.show_message("Успех", "Фото успешно сделано!")
             else:
                 self.show_message("Ошибка", "Не удалось получить изображение с камеры")
@@ -173,31 +173,50 @@ class ImageProcessorApp(QMainWindow):
             return
             
         option = self.channel_combo.currentText()
-        self.processed_image = self.image.copy()
         
         try:
             if option == "Красный канал":
-                self.processed_image[:, :, 0] = 0  # Убираем синий канал
-                self.processed_image[:, :, 1] = 0  # Убираем зеленый канал
+                # Создаем маску для красного канала (в RGB это канал 0)
+                mask = torch.zeros_like(self.tensor_image)
+                mask[:, 0, :, :] = 1  # Оставляем только красный канал
+                result = (self.tensor_image * mask).squeeze().permute(1, 2, 0).numpy() * 255
+                self.processed_image = result.astype(np.uint8)
+                
             elif option == "Зеленый канал":
-                self.processed_image[:, :, 0] = 0  # Убираем синий канал
-                self.processed_image[:, :, 2] = 0  # Убираем красный канал
+                # Маска для зеленого канала (в RGB это канал 1)
+                mask = torch.zeros_like(self.tensor_image)
+                mask[:, 1, :, :] = 1  # Оставляем только зеленый канал
+                result = (self.tensor_image * mask).squeeze().permute(1, 2, 0).numpy() * 255
+                self.processed_image = result.astype(np.uint8)
+                
             elif option == "Синий канал":
-                self.processed_image[:, :, 1] = 0  # Убираем зеленый канал
-                self.processed_image[:, :, 2] = 0  # Убираем красный канал
+                # Маска для синего канала (в RGB это канал 2)
+                mask = torch.zeros_like(self.tensor_image)
+                mask[:, 2, :, :] = 1  # Оставляем только синий канал
+                result = (self.tensor_image * mask).squeeze().permute(1, 2, 0).numpy() * 255
+                self.processed_image = result.astype(np.uint8)
+                
             elif option == "Негатив":
-                self.processed_image = 255 - self.processed_image
+                # Реализация негатива через PyTorch
+                result = (1.0 - self.tensor_image).squeeze().permute(1, 2, 0).numpy() * 255
+                self.processed_image = result.astype(np.uint8)
+                
             elif option == "Размытие по Гауссу":
                 kernel_size = self.blur_input.text()
                 if kernel_size:
                     try:
                         ksize = int(kernel_size)
                         if ksize > 0 and ksize % 2 == 1:
-                            self.processed_image = cv2.GaussianBlur(self.processed_image, (ksize, ksize), 0)
+                            # Используем OpenCV для размытия (работаем с BGR изображением)
+                            self.processed_image = cv2.GaussianBlur(self.image, (ksize, ksize), 0)
                         else:
                             self.show_message("Предупреждение", "Размер ядра должен быть положительным нечетным числом")
+                            return
                     except ValueError:
-                        pass
+                        return
+                else:
+                    return
+                    
             elif option == "Нарисовать круг":
                 x = self.circle_x_input.text()
                 y = self.circle_y_input.text()
@@ -210,22 +229,21 @@ class ImageProcessorApp(QMainWindow):
                         r = int(r)
                         
                         if x >= 0 and y >= 0 and r > 0:
+                            # Создаем копию изображения (BGR)
+                            self.processed_image = self.image.copy()
+                            # Рисуем красный круг (BGR: (0,0,255))
                             cv2.circle(self.processed_image, (x, y), r, (0, 0, 255), 2)
                         else:
                             self.show_message("Предупреждение", "Координаты должны быть положительными, а радиус больше 0")
+                            return
                     except ValueError:
-                        pass
-            elif option == "Оттенки серого (PyTorch)":
-                # Использование PyTorch для преобразования в градации серого
-                gray_tensor = torch.mean(self.tensor_image, dim=1, keepdim=True)
-                gray_tensor = gray_tensor.repeat(1, 3, 1, 1)  # Конвертируем обратно в 3 канала
-                
-                # Конвертация tensor обратно в numpy массив
-                gray_image = gray_tensor.squeeze().permute(1, 2, 0).numpy() * 255
-                gray_image = gray_image.astype(np.uint8)
-                
-                # Конвертация RGB в BGR для OpenCV
-                self.processed_image = cv2.cvtColor(gray_image, cv2.COLOR_RGB2BGR)
+                        return
+                else:
+                    return
+            
+            # Для операций с цветовыми каналами и негатива конвертируем RGB в BGR
+            if option in ["Красный канал", "Зеленый канал", "Синий канал", "Негатив"]:
+                self.processed_image = cv2.cvtColor(self.processed_image, cv2.COLOR_RGB2BGR)
             
             self.display_image(self.processed_image, self.processed_label)
         except Exception as e:
@@ -233,7 +251,7 @@ class ImageProcessorApp(QMainWindow):
     
     def display_image(self, image, label):
         if image is not None:
-            # Конвертация BGR в RGB для отображения
+            # Конвертация BGR в RGB для отображения в Qt
             if len(image.shape) == 3 and image.shape[2] == 3:
                 rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
             else:
