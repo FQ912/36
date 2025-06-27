@@ -127,12 +127,12 @@ class ImageProcessorApp(QMainWindow):
                                                 "Изображения (*.png *.jpg *.jpeg)", options=options)
         if file_name:
             try:
-                # Загрузка изображения с помощью OpenCV (в BGR формате)
+                # Загрузка изображения с помощью OpenCV 
                 self.image = cv2.imread(file_name)
                 if self.image is None:
                     raise ValueError("Не удалось прочитать файл изображения.")
                 
-                # Конвертация в PyTorch tensor (преобразуем BGR в RGB)
+                # Конвертация в PyTorch tensor
                 pil_image = Image.fromarray(cv2.cvtColor(self.image, cv2.COLOR_BGR2RGB))
                 self.tensor_image = self.transform(pil_image).unsqueeze(0)
                 
@@ -157,7 +157,7 @@ class ImageProcessorApp(QMainWindow):
             
             if ret:
                 self.image = frame
-                # Конвертация в PyTorch tensor (преобразуем BGR в RGB)
+                # Конвертация в PyTorch tensor 
                 pil_image = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
                 self.tensor_image = self.transform(pil_image).unsqueeze(0)
                 
@@ -176,21 +176,21 @@ class ImageProcessorApp(QMainWindow):
         
         try:
             if option == "Красный канал":
-                # Создаем маску для красного канала (в RGB это канал 0)
+                # Создаем маску для красного канала 
                 mask = torch.zeros_like(self.tensor_image)
                 mask[:, 0, :, :] = 1  # Оставляем только красный канал
                 result = (self.tensor_image * mask).squeeze().permute(1, 2, 0).numpy() * 255
                 self.processed_image = result.astype(np.uint8)
                 
             elif option == "Зеленый канал":
-                # Маска для зеленого канала (в RGB это канал 1)
+                # Маска для зеленого канала 
                 mask = torch.zeros_like(self.tensor_image)
                 mask[:, 1, :, :] = 1  # Оставляем только зеленый канал
                 result = (self.tensor_image * mask).squeeze().permute(1, 2, 0).numpy() * 255
                 self.processed_image = result.astype(np.uint8)
                 
             elif option == "Синий канал":
-                # Маска для синего канала (в RGB это канал 2)
+                # Маска для синего канала 
                 mask = torch.zeros_like(self.tensor_image)
                 mask[:, 2, :, :] = 1  # Оставляем только синий канал
                 result = (self.tensor_image * mask).squeeze().permute(1, 2, 0).numpy() * 255
@@ -207,7 +207,7 @@ class ImageProcessorApp(QMainWindow):
                     try:
                         ksize = int(kernel_size)
                         if ksize > 0 and ksize % 2 == 1:
-                            # Используем OpenCV для размытия (работаем с BGR изображением)
+                            # Используем OpenCV для размытия 
                             self.processed_image = cv2.GaussianBlur(self.image, (ksize, ksize), 0)
                         else:
                             self.show_message("Предупреждение", "Размер ядра должен быть положительным нечетным числом")
@@ -229,7 +229,7 @@ class ImageProcessorApp(QMainWindow):
                         r = int(r)
                         
                         if x >= 0 and y >= 0 and r > 0:
-                            # Создаем копию изображения (BGR)
+                            # Создаем копию изображения (
                             self.processed_image = self.image.copy()
                             # Рисуем красный круг (BGR: (0,0,255))
                             cv2.circle(self.processed_image, (x, y), r, (0, 0, 255), 2)
