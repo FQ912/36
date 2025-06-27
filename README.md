@@ -1,4 +1,4 @@
-0.git clone
+0.git clone https://github.com/FQ912/36
 
 1.Запуск виртуального окружения
 cd 36
