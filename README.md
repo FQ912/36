@@ -1,7 +1,7 @@
 
 1.Запуск виртуального окружения
-
-36\Scripts\activate.bat
+cd 36
+Scripts\activate.bat
 
 2. Обновить pip
 python -m pip install --upgrade pip
