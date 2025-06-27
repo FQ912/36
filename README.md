@@ -14,5 +14,4 @@ pip install -r requirements.txt
 4. Запуск приложения
  python main.py
 
-cd myenv
 
